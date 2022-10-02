@@ -1,14 +1,15 @@
 using NNlib: conv, ∇conv_data, depthwiseconv, output_size
 
 # pad dims of x with dims of y until ndims(x) == ndims(y)
-_paddims(x::Tuple, y::Tuple) = (x..., y[(end - (length(y) - length(x) - 1)):end]...)
+_paddims(x::Tuple, y::Tuple) = (x..., y[(end-(length(y)-length(x)-1)):end]...)
 
 expand(N, i::Tuple) = i
 expand(N, i::Integer) = ntuple(_ -> i, N)
 
 conv_reshape_bias(c) = conv_reshape_bias(c.bias, c.stride)
 conv_reshape_bias(@nospecialize(bias), _) = bias
-conv_reshape_bias(bias::AbstractVector, stride) = reshape(bias, map(_->1, stride)..., :, 1)
+conv_reshape_bias(bias::AbstractVector, stride) =
+    reshape(bias, map(_ -> 1, stride)..., :, 1)
 
 """
     SamePad()
@@ -45,16 +46,17 @@ julia> layer3(xs) |> size  # output size = `ceil(input_size/stride)` = 50
 """
 struct SamePad end
 
-calc_padding(lt, pad, k::NTuple{N,T}, dilation, stride) where {T,N} = expand(Val(2*N), pad)
+calc_padding(lt, pad, k::NTuple{N,T}, dilation, stride) where {T,N} =
+    expand(Val(2 * N), pad)
 function calc_padding(lt, ::SamePad, k::NTuple{N,T}, dilation, stride) where {N,T}
-  #Ref: "A guide to convolution arithmetic for deep learning" https://arxiv.org/abs/1603.07285
+    #Ref: "A guide to convolution arithmetic for deep learning" https://arxiv.org/abs/1603.07285
 
-  # Effective kernel size, including dilation
-  k_eff = @. k + (k - 1) * (dilation - 1)
-  # How much total padding needs to be applied?
-  pad_amt = @. k_eff - 1
-  # In case amount of padding is odd we need to apply different amounts to each side.
-  return Tuple(mapfoldl(i -> [cld(i, 2), fld(i,2)], vcat, pad_amt))
+    # Effective kernel size, including dilation
+    k_eff = @. k + (k - 1) * (dilation - 1)
+    # How much total padding needs to be applied?
+    pad_amt = @. k_eff - 1
+    # In case amount of padding is odd we need to apply different amounts to each side.
+    return Tuple(mapfoldl(i -> [cld(i, 2), fld(i, 2)], vcat, pad_amt))
 end
 
 """
@@ -118,13 +120,13 @@ julia> Conv((5,5), 3 => 7; stride = 2, dilation = 4)(xs) |> size
 ```
 """
 struct Conv{N,M,F,A,V}
-  σ::F
-  weight::A
-  bias::V
-  stride::NTuple{N,Int}
-  pad::NTuple{M,Int}
-  dilation::NTuple{N,Int}
-  groups::Int
+    σ::F
+    weight::A
+    bias::V
+    stride::NTuple{N,Int}
+    pad::NTuple{M,Int}
+    dilation::NTuple{N,Int}
+    groups::Int
 end
 
 """
@@ -149,23 +151,38 @@ julia> Flux.params(layer) |> length
 2
 ```
 """
-function Conv(w::AbstractArray{T,N}, b = true, σ = identity;
-              stride = 1, pad = 0, dilation = 1, groups = 1) where {T,N}
+function Conv(
+    w::AbstractArray{T,N},
+    b = true,
+    σ = identity;
+    stride = 1,
+    pad = 0,
+    dilation = 1,
+    groups = 1,
+) where {T,N}
 
-  @assert size(w, N) % groups == 0 "Output channel dimension must be divisible by groups."
-  stride = expand(Val(N-2), stride)
-  dilation = expand(Val(N-2), dilation)
-  pad = calc_padding(Conv, pad, size(w)[1:N-2], dilation, stride)
-  bias = _create_bias(w, b, size(w, N))
-  return Conv(σ, w, bias, stride, pad, dilation, groups)
+    @assert size(w, N) % groups == 0 "Output channel dimension must be divisible by groups."
+    stride = expand(Val(N - 2), stride)
+    dilation = expand(Val(N - 2), dilation)
+    pad = calc_padding(Conv, pad, size(w)[1:N-2], dilation, stride)
+    bias = _create_bias(w, b, size(w, N))
+    return Conv(σ, w, bias, stride, pad, dilation, groups)
 end
 
-function Conv(k::NTuple{N,Integer}, ch::Pair{<:Integer,<:Integer}, σ = identity;
-            init = glorot_uniform, stride = 1, pad = 0, dilation = 1, groups = 1,
-            bias = true) where N
-    
-  weight = convfilter(k, ch; init, groups)
-  Conv(weight, bias, σ; stride, pad, dilation, groups)
+function Conv(
+    k::NTuple{N,Integer},
+    ch::Pair{<:Integer,<:Integer},
+    σ = identity;
+    init = glorot_uniform,
+    stride = 1,
+    pad = 0,
+    dilation = 1,
+    groups = 1,
+    bias = true,
+) where {N}
+
+    weight = convfilter(k, ch; init, groups)
+    Conv(weight, bias, σ; stride, pad, dilation, groups)
 end
 
 """
@@ -179,46 +196,56 @@ distribution.
 
 This is internally used by the [`Conv`](@ref) layer.
 """
-function convfilter(filter::NTuple{N,Integer}, ch::Pair{<:Integer,<:Integer};
-          init = glorot_uniform, groups = 1) where N
-  cin, cout = ch
-  @assert cin % groups == 0 "Input channel dimension must be divisible by groups."
-  @assert cout % groups == 0 "Output channel dimension must be divisible by groups."
-  init(filter..., cin÷groups, cout)
+function convfilter(
+    filter::NTuple{N,Integer},
+    ch::Pair{<:Integer,<:Integer};
+    init = glorot_uniform,
+    groups = 1,
+) where {N}
+    cin, cout = ch
+    @assert cin % groups == 0 "Input channel dimension must be divisible by groups."
+    @assert cout % groups == 0 "Output channel dimension must be divisible by groups."
+    init(filter..., cin ÷ groups, cout)
 end
 
 @functor Conv
 
-conv_dims(c::Conv, x::AbstractArray) =
-  DenseConvDims(x, c.weight; stride = c.stride, padding = c.pad, dilation = c.dilation, groups = c.groups)
+conv_dims(c::Conv, x::AbstractArray) = DenseConvDims(
+    x,
+    c.weight;
+    stride = c.stride,
+    padding = c.pad,
+    dilation = c.dilation,
+    groups = c.groups,
+)
 
 ChainRulesCore.@non_differentiable conv_dims(::Any, ::Any)
 
 function (c::Conv)(x::AbstractArray)
-  σ = NNlib.fast_act(c.σ, x)
-  cdims = conv_dims(c, x)
-  σ.(conv(x, c.weight, cdims) .+ conv_reshape_bias(c))
+    σ = NNlib.fast_act(c.σ, x)
+    cdims = conv_dims(c, x)
+    σ.(conv(x, c.weight, cdims) .+ conv_reshape_bias(c))
 end
 
-_channels_in(l::Conv) = size(l.weight, ndims(l.weight)-1) * l.groups
+_channels_in(l::Conv) = size(l.weight, ndims(l.weight) - 1) * l.groups
 _channels_out(l::Conv) = size(l.weight, ndims(l.weight))
 
 function Base.show(io::IO, l::Conv)
-  print(io, "Conv(", size(l.weight)[1:ndims(l.weight)-2])
-  print(io, ", ", _channels_in(l), " => ", _channels_out(l))
-  _print_conv_opt(io, l)
-  print(io, ")")
+    print(io, "Conv(", size(l.weight)[1:ndims(l.weight)-2])
+    print(io, ", ", _channels_in(l), " => ", _channels_out(l))
+    _print_conv_opt(io, l)
+    print(io, ")")
 end
 
 function _print_conv_opt(io::IO, l)
-  l.σ == identity || print(io, ", ", l.σ)
-  all(==(0), l.pad) || print(io, ", pad=", _maybetuple_string(l.pad))
-  all(==(1), l.stride) || print(io, ", stride=", _maybetuple_string(l.stride))
-  all(==(1), l.dilation) || print(io, ", dilation=", _maybetuple_string(l.dilation))
-  if hasproperty(l, :groups)
-    (l.groups == 1) || print(io, ", groups=", l.groups)
-  end
-  (l.bias === false) && print(io, ", bias=false")
+    l.σ == identity || print(io, ", ", l.σ)
+    all(==(0), l.pad) || print(io, ", pad=", _maybetuple_string(l.pad))
+    all(==(1), l.stride) || print(io, ", stride=", _maybetuple_string(l.stride))
+    all(==(1), l.dilation) || print(io, ", dilation=", _maybetuple_string(l.dilation))
+    if hasproperty(l, :groups)
+        (l.groups == 1) || print(io, ", groups=", l.groups)
+    end
+    (l.bias === false) && print(io, ", bias=false")
 end
 
 """
@@ -253,17 +280,17 @@ julia> ConvTranspose((5,5), 3 => 7, stride=3, pad=SamePad())(xs) |> size
 ```
 """
 struct ConvTranspose{N,M,F,A,V}
-  σ::F
-  weight::A
-  bias::V
-  stride::NTuple{N,Int}
-  pad::NTuple{M,Int}
-  dilation::NTuple{N,Int}
-  groups::Int
+    σ::F
+    weight::A
+    bias::V
+    stride::NTuple{N,Int}
+    pad::NTuple{M,Int}
+    dilation::NTuple{N,Int}
+    groups::Int
 end
 
-_channels_in(l::ConvTranspose)  = size(l.weight)[end]
-_channels_out(l::ConvTranspose) = size(l.weight)[end-1]*l.groups
+_channels_in(l::ConvTranspose) = size(l.weight)[end]
+_channels_out(l::ConvTranspose) = size(l.weight)[end-1] * l.groups
 
 """
     ConvTranspose(weight::AbstractArray, [bias, activation; stride, pad, dilation, groups])
@@ -288,60 +315,83 @@ julia> Flux.params(layer) |> length
 2
 ```
 """
-function ConvTranspose(w::AbstractArray{T,N}, bias = true, σ = identity;
-                      stride = 1, pad = 0, dilation = 1, groups=1) where {T,N}
-  stride = expand(Val(N-2), stride)
-  dilation = expand(Val(N-2), dilation)
-  pad = calc_padding(ConvTranspose, pad, size(w)[1:N-2], dilation, stride)
-  b = _create_bias(w, bias, size(w, N-1) * groups)
-  return ConvTranspose(σ, w, b, stride, pad, dilation, groups)
+function ConvTranspose(
+    w::AbstractArray{T,N},
+    bias = true,
+    σ = identity;
+    stride = 1,
+    pad = 0,
+    dilation = 1,
+    groups = 1,
+) where {T,N}
+    stride = expand(Val(N - 2), stride)
+    dilation = expand(Val(N - 2), dilation)
+    pad = calc_padding(ConvTranspose, pad, size(w)[1:N-2], dilation, stride)
+    b = _create_bias(w, bias, size(w, N - 1) * groups)
+    return ConvTranspose(σ, w, b, stride, pad, dilation, groups)
 end
 
-function ConvTranspose(k::NTuple{N,Integer}, ch::Pair{<:Integer,<:Integer}, σ = identity;
-                      init = glorot_uniform, stride = 1, pad = 0, dilation = 1,
-                      groups = 1,
-                      bias = true,
-                      ) where N
+function ConvTranspose(
+    k::NTuple{N,Integer},
+    ch::Pair{<:Integer,<:Integer},
+    σ = identity;
+    init = glorot_uniform,
+    stride = 1,
+    pad = 0,
+    dilation = 1,
+    groups = 1,
+    bias = true,
+) where {N}
 
-  weight = convfilter(k, reverse(ch); init, groups)                    
-  ConvTranspose(weight, bias, σ; stride, pad, dilation, groups)
+    weight = convfilter(k, reverse(ch); init, groups)
+    ConvTranspose(weight, bias, σ; stride, pad, dilation, groups)
 end
 
 @functor ConvTranspose
 
 function conv_transpose_dims(c::ConvTranspose, x::AbstractArray)
-  # Calculate size of "input", from ∇conv_data()'s perspective...
-  combined_pad = (c.pad[1:2:end] .+ c.pad[2:2:end])
-  I = (size(x)[1:end-2] .- 1).*c.stride .+ 1 .+ (size(c.weight)[1:end-2] .- 1).*c.dilation .- combined_pad
-  C_in = size(c.weight)[end-1] * c.groups
-  batch_size = size(x)[end]
-  # Create DenseConvDims() that looks like the corresponding conv()
-  w_size = size(c.weight)
-  return DenseConvDims((I..., C_in, batch_size), w_size;
-                      stride=c.stride,
-                      padding=c.pad,
-                      dilation=c.dilation,
-                      groups=c.groups,
-  )
+    # Calculate size of "input", from ∇conv_data()'s perspective...
+    combined_pad = (c.pad[1:2:end] .+ c.pad[2:2:end])
+    I =
+        (size(x)[1:end-2] .- 1) .* c.stride .+ 1 .+
+        (size(c.weight)[1:end-2] .- 1) .* c.dilation .- combined_pad
+    C_in = size(c.weight)[end-1] * c.groups
+    batch_size = size(x)[end]
+    # Create DenseConvDims() that looks like the corresponding conv()
+    w_size = size(c.weight)
+    return DenseConvDims(
+        (I..., C_in, batch_size),
+        w_size;
+        stride = c.stride,
+        padding = c.pad,
+        dilation = c.dilation,
+        groups = c.groups,
+    )
 end
 
 ChainRulesCore.@non_differentiable conv_transpose_dims(::Any, ::Any)
 
 function (c::ConvTranspose)(x::AbstractArray)
-  σ = NNlib.fast_act(c.σ, x)
-  cdims = conv_transpose_dims(c, x)
-  σ.(∇conv_data(x, c.weight, cdims) .+ conv_reshape_bias(c))
+    σ = NNlib.fast_act(c.σ, x)
+    cdims = conv_transpose_dims(c, x)
+    σ.(∇conv_data(x, c.weight, cdims) .+ conv_reshape_bias(c))
 end
 
 function Base.show(io::IO, l::ConvTranspose)
-  print(io, "ConvTranspose(", size(l.weight)[1:ndims(l.weight)-2])
-  print(io, ", ", _channels_in(l), " => ", _channels_out(l))
-  _print_conv_opt(io, l)
-  print(io, ")")
+    print(io, "ConvTranspose(", size(l.weight)[1:ndims(l.weight)-2])
+    print(io, ", ", _channels_in(l), " => ", _channels_out(l))
+    _print_conv_opt(io, l)
+    print(io, ")")
 end
 
-function calc_padding(::Type{ConvTranspose}, pad::SamePad, k::NTuple{N,T}, dilation, stride) where {N,T}
-  calc_padding(Conv, pad, k .- stride .+ 1, dilation, stride)
+function calc_padding(
+    ::Type{ConvTranspose},
+    pad::SamePad,
+    k::NTuple{N,T},
+    dilation,
+    stride,
+) where {N,T}
+    calc_padding(Conv, pad, k .- stride .+ 1, dilation, stride)
 end
 
 """
@@ -368,15 +418,29 @@ julia> DepthwiseConv((5, 5), 3 => 9, stride=2, pad=2)(xs) |> size
 (50, 50, 9, 50)
 ```
 """
-function DepthwiseConv(k::NTuple{<:Any,Integer}, ch::Pair{<:Integer,<:Integer}, σ = identity; 
-            stride = 1, pad = 0, dilation = 1, bias = true, init = glorot_uniform)
-  Conv(k, ch, σ; groups=ch.first, stride, pad, dilation, bias, init)
+function DepthwiseConv(
+    k::NTuple{<:Any,Integer},
+    ch::Pair{<:Integer,<:Integer},
+    σ = identity;
+    stride = 1,
+    pad = 0,
+    dilation = 1,
+    bias = true,
+    init = glorot_uniform,
+)
+    Conv(k, ch, σ; groups = ch.first, stride, pad, dilation, bias, init)
 end
 
-function DepthwiseConv(w::AbstractArray{T,N}, bias = true, σ = identity;
-                  stride = 1, pad = 0, dilation = 1) where {T,N}
-  w2 = reshape(w, size(w)[1:end-2]..., 1, :)
-  Conv(w2, bias, σ; groups = size(w)[end-1], stride, pad, dilation)
+function DepthwiseConv(
+    w::AbstractArray{T,N},
+    bias = true,
+    σ = identity;
+    stride = 1,
+    pad = 0,
+    dilation = 1,
+) where {T,N}
+    w2 = reshape(w, size(w)[1:end-2]..., 1, :)
+    Conv(w2, bias, σ; groups = size(w)[end-1], stride, pad, dilation)
 end
 
 
@@ -408,12 +472,12 @@ julia> CrossCor((5,5), 3 => 7, stride=3, pad=(2,0))(xs) |> size
 ```
 """
 struct CrossCor{N,M,F,A,V}
-  σ::F
-  weight::A
-  bias::V
-  stride::NTuple{N,Int}
-  pad::NTuple{M,Int}
-  dilation::NTuple{N,Int}
+    σ::F
+    weight::A
+    bias::V
+    stride::NTuple{N,Int}
+    pad::NTuple{M,Int}
+    dilation::NTuple{N,Int}
 end
 
 """
@@ -436,46 +500,65 @@ julia> layer(randn(100, 4, 64)) |> size
 (98, 5, 64)
 ```
 """
-function CrossCor(w::AbstractArray{T,N}, bias = true, σ = identity;
-                  stride = 1, pad = 0, dilation = 1) where {T,N}
-  stride = expand(Val(N-2), stride)
-  dilation = expand(Val(N-2), dilation)
-  pad = calc_padding(CrossCor, pad, size(w)[1:N-2], dilation, stride)
-  b = _create_bias(w, bias, size(w, N))
-  return CrossCor(σ, w, b, stride, pad, dilation)
+function CrossCor(
+    w::AbstractArray{T,N},
+    bias = true,
+    σ = identity;
+    stride = 1,
+    pad = 0,
+    dilation = 1,
+) where {T,N}
+    stride = expand(Val(N - 2), stride)
+    dilation = expand(Val(N - 2), dilation)
+    pad = calc_padding(CrossCor, pad, size(w)[1:N-2], dilation, stride)
+    b = _create_bias(w, bias, size(w, N))
+    return CrossCor(σ, w, b, stride, pad, dilation)
 end
 
-function CrossCor(k::NTuple{N,Integer}, ch::Pair{<:Integer,<:Integer}, σ = identity;
-                  init = glorot_uniform, stride = 1, pad = 0, dilation = 1,
-                  bias = true) where N
+function CrossCor(
+    k::NTuple{N,Integer},
+    ch::Pair{<:Integer,<:Integer},
+    σ = identity;
+    init = glorot_uniform,
+    stride = 1,
+    pad = 0,
+    dilation = 1,
+    bias = true,
+) where {N}
 
-  weight = convfilter(k, ch, init = init)
-  return CrossCor(weight, bias, σ; stride, pad, dilation)
+    weight = convfilter(k, ch, init = init)
+    return CrossCor(weight, bias, σ; stride, pad, dilation)
 end
 
 @functor CrossCor
 
 function crosscor(x, w, ddims::DenseConvDims)
-  ddims = DenseConvDims(ddims, F=true)
-  return conv(x, w, ddims)
+    ddims = DenseConvDims(ddims, F = true)
+    return conv(x, w, ddims)
 end
 
 crosscor_dims(c::CrossCor, x::AbstractArray) =
-  DenseConvDims(x, c.weight; stride = c.stride, padding = c.pad, dilation = c.dilation)
+    DenseConvDims(x, c.weight; stride = c.stride, padding = c.pad, dilation = c.dilation)
 
 ChainRulesCore.@non_differentiable crosscor_dims(::Any, ::Any)
 
 function (c::CrossCor)(x::AbstractArray)
-  σ = NNlib.fast_act(c.σ, x)
-  cdims = crosscor_dims(c, x)
-  σ.(crosscor(x, c.weight, cdims) .+ conv_reshape_bias(c))
+    σ = NNlib.fast_act(c.σ, x)
+    cdims = crosscor_dims(c, x)
+    σ.(crosscor(x, c.weight, cdims) .+ conv_reshape_bias(c))
 end
 
 function Base.show(io::IO, l::CrossCor)
-  print(io, "CrossCor(", size(l.weight)[1:ndims(l.weight)-2])
-  print(io, ", ", size(l.weight, ndims(l.weight)-1), " => ", size(l.weight, ndims(l.weight)))
-  _print_conv_opt(io, l)
-  print(io, ")")
+    print(io, "CrossCor(", size(l.weight)[1:ndims(l.weight)-2])
+    print(
+        io,
+        ", ",
+        size(l.weight, ndims(l.weight) - 1),
+        " => ",
+        size(l.weight, ndims(l.weight)),
+    )
+    _print_conv_opt(io, l)
+    print(io, ")")
 end
 
 """
@@ -500,23 +583,23 @@ julia> MaxPool((4,4))(xs) ≈ AdaptiveMaxPool((25, 25))(xs)
 true
 ```
 """
-struct AdaptiveMaxPool{S, O}
-  out::NTuple{O, Int}
-  AdaptiveMaxPool(out::NTuple{O, Int}) where O = new{O + 2, O}(out)
+struct AdaptiveMaxPool{S,O}
+    out::NTuple{O,Int}
+    AdaptiveMaxPool(out::NTuple{O,Int}) where {O} = new{O + 2,O}(out)
 end
 
-function (a::AdaptiveMaxPool{S})(x::AbstractArray{T, S}) where {S, T}
-  insize = size(x)[1:end-2]
-  outsize = a.out
-  stride = insize .÷ outsize
-  k = insize .- (outsize .- 1) .* stride
-  pad = 0
-  pdims = PoolDims(x, k; padding=pad, stride=stride)
-  return maxpool(x, pdims)
+function (a::AdaptiveMaxPool{S})(x::AbstractArray{T,S}) where {S,T}
+    insize = size(x)[1:end-2]
+    outsize = a.out
+    stride = insize .÷ outsize
+    k = insize .- (outsize .- 1) .* stride
+    pad = 0
+    pdims = PoolDims(x, k; padding = pad, stride = stride)
+    return maxpool(x, pdims)
 end
 
 function Base.show(io::IO, a::AdaptiveMaxPool)
-  print(io, "AdaptiveMaxPool(", a.out, ")")
+    print(io, "AdaptiveMaxPool(", a.out, ")")
 end
 
 """
@@ -541,23 +624,23 @@ julia> MeanPool((4,4))(xs) ≈ AdaptiveMeanPool((25, 25))(xs)
 true
 ```
 """
-struct AdaptiveMeanPool{S, O}
-  out::NTuple{O, Int}
-  AdaptiveMeanPool(out::NTuple{O, Int}) where O = new{O + 2, O}(out)
+struct AdaptiveMeanPool{S,O}
+    out::NTuple{O,Int}
+    AdaptiveMeanPool(out::NTuple{O,Int}) where {O} = new{O + 2,O}(out)
 end
 
-function (a::AdaptiveMeanPool{S})(x::AbstractArray{T, S}) where {S, T}
-  insize = size(x)[1:end-2]
-  outsize = a.out
-  stride = insize .÷ outsize
-  k = insize .- (outsize .- 1) .* stride
-  pad = 0
-  pdims = PoolDims(x, k; padding=pad, stride=stride)
-  return meanpool(x, pdims)
+function (a::AdaptiveMeanPool{S})(x::AbstractArray{T,S}) where {S,T}
+    insize = size(x)[1:end-2]
+    outsize = a.out
+    stride = insize .÷ outsize
+    k = insize .- (outsize .- 1) .* stride
+    pad = 0
+    pdims = PoolDims(x, k; padding = pad, stride = stride)
+    return meanpool(x, pdims)
 end
 
 function Base.show(io::IO, a::AdaptiveMeanPool)
-  print(io, "AdaptiveMeanPool(", a.out, ")")
+    print(io, "AdaptiveMeanPool(", a.out, ")")
 end
 
 """
@@ -585,18 +668,18 @@ julia> GlobalMaxPool()(rand(3,5,7)) |> size  # preserves 2 dimensions
 struct GlobalMaxPool end
 
 function (g::GlobalMaxPool)(x)
-  # Input size
-  x_size = size(x)
-  # Kernel size
-  k = x_size[1:end-2]
-  # Pooling dimensions
-  pdims = PoolDims(x, k)
+    # Input size
+    x_size = size(x)
+    # Kernel size
+    k = x_size[1:end-2]
+    # Pooling dimensions
+    pdims = PoolDims(x, k)
 
-  return maxpool(x, pdims)
+    return maxpool(x, pdims)
 end
 
 function Base.show(io::IO, g::GlobalMaxPool)
-  print(io, "GlobalMaxPool()")
+    print(io, "GlobalMaxPool()")
 end
 
 """
@@ -619,18 +702,18 @@ julia> m(xs) |> size
 struct GlobalMeanPool end
 
 function (g::GlobalMeanPool)(x)
-  # Input size
-  x_size = size(x)
-  # Kernel size
-  k = x_size[1:end-2]
-  # Pooling dimensions
-  pdims = PoolDims(x, k)
+    # Input size
+    x_size = size(x)
+    # Kernel size
+    k = x_size[1:end-2]
+    # Pooling dimensions
+    pdims = PoolDims(x, k)
 
-  return meanpool(x, pdims)
+    return meanpool(x, pdims)
 end
 
 function Base.show(io::IO, g::GlobalMeanPool)
-  print(io, "GlobalMeanPool()")
+    print(io, "GlobalMeanPool()")
 end
 
 """
@@ -673,31 +756,31 @@ julia> layer(rand(Float32, 100, 7, 50)) |> size
 ```
 """
 struct MaxPool{N,M}
-  k::NTuple{N,Int}
-  pad::NTuple{M,Int}
-  stride::NTuple{N,Int}
+    k::NTuple{N,Int}
+    pad::NTuple{M,Int}
+    stride::NTuple{N,Int}
 end
 
-function MaxPool(k::NTuple{N,Integer}; pad = 0, stride = k) where N
-  stride = expand(Val(N), stride)
-  pad = calc_padding(MaxPool, pad, k, 1, stride)
-  return MaxPool(k, pad, stride)
+function MaxPool(k::NTuple{N,Integer}; pad = 0, stride = k) where {N}
+    stride = expand(Val(N), stride)
+    pad = calc_padding(MaxPool, pad, k, 1, stride)
+    return MaxPool(k, pad, stride)
 end
 
 function (m::MaxPool)(x)
-  pdims = PoolDims(x, m.k; padding=m.pad, stride=m.stride)
-  return maxpool(x, pdims)
+    pdims = PoolDims(x, m.k; padding = m.pad, stride = m.stride)
+    return maxpool(x, pdims)
 end
 
 function Base.show(io::IO, m::MaxPool)
-  print(io, "MaxPool(", m.k)
-  all(==(0), m.pad) || print(io, ", pad=", _maybetuple_string(m.pad))
-  m.stride == m.k || print(io, ", stride=", _maybetuple_string(m.stride))
-  print(io, ")")
+    print(io, "MaxPool(", m.k)
+    all(==(0), m.pad) || print(io, ", pad=", _maybetuple_string(m.pad))
+    m.stride == m.k || print(io, ", stride=", _maybetuple_string(m.stride))
+    print(io, ")")
 end
 
 _maybetuple_string(pad) = string(pad)
-_maybetuple_string(pad::Tuple) = all(==(pad[1]), pad) ? string(pad[1])  : string(pad)
+_maybetuple_string(pad::Tuple) = all(==(pad[1]), pad) ? string(pad[1]) : string(pad)
 
 """
     MeanPool(window::NTuple; pad=0, stride=window)
@@ -732,25 +815,25 @@ julia> m(xs) |> size
 ```
 """
 struct MeanPool{N,M}
-  k::NTuple{N,Int}
-  pad::NTuple{M,Int}
-  stride::NTuple{N,Int}
+    k::NTuple{N,Int}
+    pad::NTuple{M,Int}
+    stride::NTuple{N,Int}
 end
 
-function MeanPool(k::NTuple{N,Integer}; pad = 0, stride = k) where N
-  stride = expand(Val(N), stride)
-  pad = calc_padding(MeanPool, pad, k, 1, stride)
-  return MeanPool(k, pad, stride)
+function MeanPool(k::NTuple{N,Integer}; pad = 0, stride = k) where {N}
+    stride = expand(Val(N), stride)
+    pad = calc_padding(MeanPool, pad, k, 1, stride)
+    return MeanPool(k, pad, stride)
 end
 
 function (m::MeanPool)(x)
-  pdims = PoolDims(x, m.k; padding=m.pad, stride=m.stride)
-  return meanpool(x, pdims)
+    pdims = PoolDims(x, m.k; padding = m.pad, stride = m.stride)
+    return meanpool(x, pdims)
 end
 
 function Base.show(io::IO, m::MeanPool)
-  print(io, "MeanPool(", m.k)
-  all(==(0), m.pad) || print(io, ", pad=", _maybetuple_string(m.pad))
-  m.stride == m.k || print(io, ", stride=", _maybetuple_string(m.stride))
-  print(io, ")")
+    print(io, "MeanPool(", m.k)
+    all(==(0), m.pad) || print(io, ", pad=", _maybetuple_string(m.pad))
+    m.stride == m.k || print(io, ", stride=", _maybetuple_string(m.stride))
+    print(io, ")")
 end

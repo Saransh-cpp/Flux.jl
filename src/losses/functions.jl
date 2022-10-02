@@ -19,8 +19,8 @@ julia> Flux.mae(y_model, 1:3)
 ```
 """
 function mae(ŷ, y; agg = mean)
-  _check_sizes(ŷ, y)
-  agg(abs.(ŷ .- y))
+    _check_sizes(ŷ, y)
+    agg(abs.(ŷ .- y))
 end
 
 """
@@ -43,8 +43,8 @@ julia> Flux.mse(y_model, y_true)
 ```
 """
 function mse(ŷ, y; agg = mean)
-  _check_sizes(ŷ, y)
-  agg(abs2.(ŷ .- y))
+    _check_sizes(ŷ, y)
+    agg(abs2.(ŷ .- y))
 end
 
 """
@@ -67,8 +67,8 @@ julia> Flux.msle(Float32[0.9, 1.8, 2.7], 1:3)
 ```
 """
 function msle(ŷ, y; agg = mean, ϵ = epseltype(ŷ))
-  _check_sizes(ŷ, y)
-  agg((log.((ŷ .+ ϵ) ./ (y .+ ϵ))) .^2 )
+    _check_sizes(ŷ, y)
+    agg((log.((ŷ .+ ϵ) ./ (y .+ ϵ))) .^ 2)
 end
 
 """
@@ -93,12 +93,12 @@ julia> Flux.huber_loss(ŷ, 1:3, δ=0.05)  # changes behaviour as |ŷ - y| > δ
 ```
 """
 function huber_loss(ŷ, y; agg = mean, δ = ofeltype(ŷ, 1))
-   _check_sizes(ŷ, y)
-   abs_error = abs.(ŷ .- y)
-   #TODO: remove dropgrad when Zygote can handle this function with CuArrays
-   temp = Zygote.dropgrad(abs_error .<  δ)
-   x = ofeltype(ŷ, 0.5)
-   agg(((abs_error .^ 2) .* temp) .* x .+ δ * (abs_error .- x * δ) .* (1 .- temp))
+    _check_sizes(ŷ, y)
+    abs_error = abs.(ŷ .- y)
+    #TODO: remove dropgrad when Zygote can handle this function with CuArrays
+    temp = Zygote.dropgrad(abs_error .< δ)
+    x = ofeltype(ŷ, 0.5)
+    agg(((abs_error .^ 2) .* temp) .* x .+ δ * (abs_error .- x * δ) .* (1 .- temp))
 end
 
 """
@@ -157,9 +157,9 @@ function label_smoothing(y::Union{AbstractArray,Number}, α::Number; dims::Int =
         throw(ArgumentError("α must be between 0 and 1"))
     end
     if dims == 0
-        y_smoothed = y .* (1 - α) .+ α*1//2
+        y_smoothed = y .* (1 - α) .+ α * 1 // 2
     elseif dims == 1
-        y_smoothed = y .* (1 - α) .+ α* 1 // size(y, 1)
+        y_smoothed = y .* (1 - α) .+ α * 1 // size(y, 1)
     else
         throw(ArgumentError("`dims` should be either 0 or 1"))
     end
@@ -223,8 +223,8 @@ julia> Flux.crossentropy(y_model, y_smooth)
 ```
 """
 function crossentropy(ŷ, y; dims = 1, agg = mean, ϵ = epseltype(ŷ))
-  _check_sizes(ŷ, y)
-  agg(.-sum(xlogy.(y, ŷ .+ ϵ); dims = dims))
+    _check_sizes(ŷ, y)
+    agg(.-sum(xlogy.(y, ŷ .+ ϵ); dims = dims))
 end
 
 """
@@ -262,8 +262,8 @@ julia> Flux.crossentropy(softmax(y_model), y_label)
 ```
 """
 function logitcrossentropy(ŷ, y; dims = 1, agg = mean)
-  _check_sizes(ŷ, y)
-  agg(.-sum(y .* logsoftmax(ŷ; dims = dims); dims = dims))
+    _check_sizes(ŷ, y)
+    agg(.-sum(y .* logsoftmax(ŷ; dims = dims); dims = dims))
 end
 
 """
@@ -311,8 +311,8 @@ julia> Flux.crossentropy(y_prob, y_hot)
 ```
 """
 function binarycrossentropy(ŷ, y; agg = mean, ϵ = epseltype(ŷ))
-  _check_sizes(ŷ, y)
-  agg(@.(-xlogy(y, ŷ + ϵ) - xlogy(1 - y, 1 - ŷ + ϵ)))
+    _check_sizes(ŷ, y)
+    agg(@.(-xlogy(y, ŷ + ϵ) - xlogy(1 - y, 1 - ŷ + ϵ)))
 end
 
 """
@@ -341,8 +341,8 @@ julia> Flux.binarycrossentropy(sigmoid.(y_model), y_bin)
 ```
 """
 function logitbinarycrossentropy(ŷ, y; agg = mean)
-  _check_sizes(ŷ, y)
-  agg(@.((1 - y) * ŷ - logσ(ŷ)))
+    _check_sizes(ŷ, y)
+    agg(@.((1 - y) * ŷ - logσ(ŷ)))
 end
 
 """
@@ -381,10 +381,10 @@ Inf
 ```
 """
 function kldivergence(ŷ, y; dims = 1, agg = mean, ϵ = epseltype(ŷ))
-  _check_sizes(ŷ, y)
-  entropy = agg(sum(xlogx.(y), dims = dims))
-  cross_entropy = crossentropy(ŷ, y; dims = dims, agg = agg, ϵ = ϵ)
-  return entropy + cross_entropy
+    _check_sizes(ŷ, y)
+    entropy = agg(sum(xlogx.(y), dims = dims))
+    cross_entropy = crossentropy(ŷ, y; dims = dims, agg = agg, ϵ = ϵ)
+    return entropy + cross_entropy
 end
 
 """
@@ -406,8 +406,8 @@ julia> Flux.poisson_loss(y_model, 1:3)
 ```
 """
 function poisson_loss(ŷ, y; agg = mean)
-  _check_sizes(ŷ, y)
-  agg(ŷ .- xlogy.(y, ŷ))
+    _check_sizes(ŷ, y)
+    agg(ŷ .- xlogy.(y, ŷ))
 end
 
 """
@@ -441,8 +441,8 @@ true
 ```
 """
 function hinge_loss(ŷ, y; agg = mean)
-  _check_sizes(ŷ, y)
-  agg(max.(0, 1 .- ŷ .* y))
+    _check_sizes(ŷ, y)
+    agg(max.(0, 1 .- ŷ .* y))
 end
 
 """
@@ -476,8 +476,8 @@ true
 ```
 """
 function squared_hinge_loss(ŷ, y; agg = mean)
-  _check_sizes(ŷ, y)
-  agg((max.(0, 1 .- ŷ .* y)) .^ 2)
+    _check_sizes(ŷ, y)
+    agg((max.(0, 1 .- ŷ .* y)) .^ 2)
 end
 
 """
@@ -502,8 +502,8 @@ julia> 1 - Flux.dice_coeff_loss(y_pred, 1:3)  # ~ F1 score for image segmentatio
 ```
 """
 function dice_coeff_loss(ŷ, y; smooth = ofeltype(ŷ, 1.0))
-  _check_sizes(ŷ, y)
-  1 - (2 * sum(y .* ŷ) + smooth) / (sum(y .^ 2) + sum(ŷ .^ 2) + smooth) #TODO agg
+    _check_sizes(ŷ, y)
+    1 - (2 * sum(y .* ŷ) + smooth) / (sum(y .^ 2) + sum(ŷ .^ 2) + smooth) #TODO agg
 end
 
 """
@@ -553,10 +553,10 @@ julia> Flux.binary_focal_loss(ŷ, y) ≈ 0.0728675615927385
 true
 ```
 """
-function binary_focal_loss(ŷ, y; agg=mean, γ=2, ϵ=epseltype(ŷ))
+function binary_focal_loss(ŷ, y; agg = mean, γ = 2, ϵ = epseltype(ŷ))
     _check_sizes(ŷ, y)
     ŷ = ŷ .+ ϵ
-    p_t = y .* ŷ  + (1 .- y) .* (1 .- ŷ)
+    p_t = y .* ŷ + (1 .- y) .* (1 .- ŷ)
     ce = -log.(p_t)
     weight = (1 .- p_t) .^ γ
     loss = weight .* ce
@@ -597,10 +597,10 @@ true
 See also: [`Losses.binary_focal_loss`](@ref) for binary (not one-hot) labels
 
 """
-function focal_loss(ŷ, y; dims=1, agg=mean, γ=2, ϵ=epseltype(ŷ))
+function focal_loss(ŷ, y; dims = 1, agg = mean, γ = 2, ϵ = epseltype(ŷ))
     _check_sizes(ŷ, y)
     ŷ = ŷ .+ ϵ
-    agg(sum(@. -y * (1 - ŷ)^γ * log(ŷ); dims=dims))
+    agg(sum(@. -y * (1 - ŷ)^γ * log(ŷ); dims = dims))
 end
 
 """

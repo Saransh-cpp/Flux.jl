@@ -1,52 +1,52 @@
 
-gate(h, n) = (1:h) .+ h*(n-1)
-gate(x::AbstractVector, h, n) = @view x[gate(h,n)]
-gate(x::AbstractMatrix, h, n) = view(x, gate(h,n), :)
+gate(h, n) = (1:h) .+ h * (n - 1)
+gate(x::AbstractVector, h, n) = @view x[gate(h, n)]
+gate(x::AbstractMatrix, h, n) = view(x, gate(h, n), :)
 
 # AD-friendly helper for dividing monolithic RNN params into equally sized gates
-multigate(x::AbstractArray, h, ::Val{N}) where N = ntuple(n -> gate(x,h,n), N)
+multigate(x::AbstractArray, h, ::Val{N}) where {N} = ntuple(n -> gate(x, h, n), N)
 
 function ChainRulesCore.rrule(::typeof(multigate), x::AbstractArray, h, c)
-  function multigate_pullback(dy)
-    dx = map!(zero, similar(x, float(eltype(x)), axes(x)), x)
-    foreach(multigate(dx, h, c), unthunk(dy)) do dxᵢ, dyᵢ
-      dyᵢ isa AbstractZero && return
-      @. dxᵢ += dyᵢ
+    function multigate_pullback(dy)
+        dx = map!(zero, similar(x, float(eltype(x)), axes(x)), x)
+        foreach(multigate(dx, h, c), unthunk(dy)) do dxᵢ, dyᵢ
+            dyᵢ isa AbstractZero && return
+            @. dxᵢ += dyᵢ
+        end
+        return (NoTangent(), dx, NoTangent(), NoTangent())
     end
-    return (NoTangent(), dx, NoTangent(), NoTangent())
-  end
-  return multigate(x, h, c), multigate_pullback
+    return multigate(x, h, c), multigate_pullback
 end
 
 # Type stable and AD-friendly helper for iterating over the last dimension of an array
 function eachlastdim(A::AbstractArray{T,N}) where {T,N}
-  inds_before = ntuple(_ -> :, N-1)
-  return (view(A, inds_before..., i) for i in axes(A, N))
+    inds_before = ntuple(_ -> :, N - 1)
+    return (view(A, inds_before..., i) for i in axes(A, N))
 end
 
 # adapted from https://github.com/JuliaDiff/ChainRules.jl/blob/f13e0a45d10bb13f48d6208e9c9d5b4a52b96732/src/rulesets/Base/indexing.jl#L77
-function ∇eachlastdim(dys_raw, x::AbstractArray{T, N}) where {T, N}
-  dys = unthunk(dys_raw)
-  i1 = findfirst(dy -> dy isa AbstractArray, dys)
-  if isnothing(i1)  # all slices are Zero!
-      return fill!(similar(x, T, axes(x)), zero(T))
-  end
-  # The whole point of this gradient is that we can allocate one `dx` array:
-  dx = similar(x, T, axes(x))::AbstractArray
-  for i in axes(x, N)
-      slice = selectdim(dx, N, i)
-      if dys[i] isa AbstractZero
-          fill!(slice, zero(eltype(slice)))
-      else
-          copyto!(slice, dys[i])
-      end
-  end
-  return ProjectTo(x)(dx)
+function ∇eachlastdim(dys_raw, x::AbstractArray{T,N}) where {T,N}
+    dys = unthunk(dys_raw)
+    i1 = findfirst(dy -> dy isa AbstractArray, dys)
+    if isnothing(i1)  # all slices are Zero!
+        return fill!(similar(x, T, axes(x)), zero(T))
+    end
+    # The whole point of this gradient is that we can allocate one `dx` array:
+    dx = similar(x, T, axes(x))::AbstractArray
+    for i in axes(x, N)
+        slice = selectdim(dx, N, i)
+        if dys[i] isa AbstractZero
+            fill!(slice, zero(eltype(slice)))
+        else
+            copyto!(slice, dys[i])
+        end
+    end
+    return ProjectTo(x)(dx)
 end
 
 function ChainRulesCore.rrule(::typeof(eachlastdim), x::AbstractArray{T,N}) where {T,N}
-  lastdims(dy) = (NoTangent(), ∇eachlastdim(unthunk(dy), x))
-  collect(eachlastdim(x)), lastdims
+    lastdims(dy) = (NoTangent(), ∇eachlastdim(unthunk(dy), x))
+    collect(eachlastdim(x)), lastdims
 end
 
 reshape_cell_output(h, x) = reshape(h, :, size(x)[2:end]...)
@@ -126,13 +126,13 @@ julia> rnn.state
 ```
 """
 mutable struct Recur{T,S}
-  cell::T
-  state::S
+    cell::T
+    state::S
 end
 
 function (m::Recur)(x)
-  m.state, y = m.cell(m.state, x)
-  return y
+    m.state, y = m.cell(m.state, x)
+    return y
 end
 
 @functor Recur
@@ -181,38 +181,46 @@ reset!(m) = foreach(reset!, functor(m)[1])
 
 flip(f, xs) = reverse([f(x) for x in reverse(xs)])
 
-function (m::Recur)(x::AbstractArray{T, 3}) where T
-  h = [m(x_t) for x_t in eachlastdim(x)]
-  sze = size(h[1])
-  reshape(reduce(hcat, h), sze[1], sze[2], length(h))
+function (m::Recur)(x::AbstractArray{T,3}) where {T}
+    h = [m(x_t) for x_t in eachlastdim(x)]
+    sze = size(h[1])
+    reshape(reduce(hcat, h), sze[1], sze[2], length(h))
 end
 
 # Vanilla RNN
 
 struct RNNCell{F,A,V,S}
-  σ::F
-  Wi::A
-  Wh::A
-  b::V
-  state0::S
+    σ::F
+    Wi::A
+    Wh::A
+    b::V
+    state0::S
 end
 
-RNNCell((in, out)::Pair, σ=tanh; init=Flux.glorot_uniform, initb=zeros32, init_state=zeros32) =
-  RNNCell(σ, init(out, in), init(out, out), initb(out), init_state(out,1))
+RNNCell(
+    (in, out)::Pair,
+    σ = tanh;
+    init = Flux.glorot_uniform,
+    initb = zeros32,
+    init_state = zeros32,
+) = RNNCell(σ, init(out, in), init(out, out), initb(out), init_state(out, 1))
 
-function (m::RNNCell{F,A,V,<:AbstractMatrix{T}})(h, x::Union{AbstractVecOrMat{T},OneHotArray}) where {F,A,V,T}
-  Wi, Wh, b = m.Wi, m.Wh, m.b
-  σ = NNlib.fast_act(m.σ, x)
-  h = σ.(Wi*x .+ Wh*h .+ b)
-  return h, reshape_cell_output(h, x)
+function (m::RNNCell{F,A,V,<:AbstractMatrix{T}})(
+    h,
+    x::Union{AbstractVecOrMat{T},OneHotArray},
+) where {F,A,V,T}
+    Wi, Wh, b = m.Wi, m.Wh, m.b
+    σ = NNlib.fast_act(m.σ, x)
+    h = σ.(Wi * x .+ Wh * h .+ b)
+    return h, reshape_cell_output(h, x)
 end
 
 @functor RNNCell
 
 function Base.show(io::IO, l::RNNCell)
-  print(io, "RNNCell(", size(l.Wi, 2), " => ", size(l.Wi, 1))
-  l.σ == identity || print(io, ", ", l.σ)
-  print(io, ")")
+    print(io, "RNNCell(", size(l.Wi, 2), " => ", size(l.Wi, 1))
+    l.σ == identity || print(io, ", ", l.σ)
+    print(io, ")")
 end
 
 """
@@ -278,34 +286,44 @@ Recur(m::RNNCell) = Recur(m, m.state0)
 # LSTM
 
 struct LSTMCell{A,V,S}
-  Wi::A
-  Wh::A
-  b::V
-  state0::S
+    Wi::A
+    Wh::A
+    b::V
+    state0::S
 end
 
-function LSTMCell((in, out)::Pair;
-                  init = glorot_uniform,
-                  initb = zeros32,
-                  init_state = zeros32)
-  cell = LSTMCell(init(out * 4, in), init(out * 4, out), initb(out * 4), (init_state(out,1), init_state(out,1)))
-  cell.b[gate(out, 2)] .= 1
-  return cell
+function LSTMCell(
+    (in, out)::Pair;
+    init = glorot_uniform,
+    initb = zeros32,
+    init_state = zeros32,
+)
+    cell = LSTMCell(
+        init(out * 4, in),
+        init(out * 4, out),
+        initb(out * 4),
+        (init_state(out, 1), init_state(out, 1)),
+    )
+    cell.b[gate(out, 2)] .= 1
+    return cell
 end
 
-function (m::LSTMCell{A,V,<:NTuple{2,AbstractMatrix{T}}})((h, c), x::Union{AbstractVecOrMat{T},OneHotArray}) where {A,V,T}
-  b, o = m.b, size(h, 1)
-  g = muladd(m.Wi, x, muladd(m.Wh, h, b))
-  input, forget, cell, output = multigate(g, o, Val(4))
-  c′ = @. sigmoid_fast(forget) * c + sigmoid_fast(input) * tanh_fast(cell)
-  h′ = @. sigmoid_fast(output) * tanh_fast(c′)
-  return (h′, c′), reshape_cell_output(h′, x)
+function (m::LSTMCell{A,V,<:NTuple{2,AbstractMatrix{T}}})(
+    (h, c),
+    x::Union{AbstractVecOrMat{T},OneHotArray},
+) where {A,V,T}
+    b, o = m.b, size(h, 1)
+    g = muladd(m.Wi, x, muladd(m.Wh, h, b))
+    input, forget, cell, output = multigate(g, o, Val(4))
+    c′ = @. sigmoid_fast(forget) * c + sigmoid_fast(input) * tanh_fast(cell)
+    h′ = @. sigmoid_fast(output) * tanh_fast(c′)
+    return (h′, c′), reshape_cell_output(h′, x)
 end
 
 @functor LSTMCell
 
 Base.show(io::IO, l::LSTMCell) =
-  print(io, "LSTMCell(", size(l.Wi, 2), " => ", size(l.Wi, 1)÷4, ")")
+    print(io, "LSTMCell(", size(l.Wi, 2), " => ", size(l.Wi, 1) ÷ 4, ")")
 
 """
     LSTM(in => out)
@@ -346,34 +364,38 @@ Recur(m::LSTMCell) = Recur(m, m.state0)
 # GRU
 
 function _gru_output(gxs, ghs, bs)
-  r = @. sigmoid_fast(gxs[1] + ghs[1] + bs[1])
-  z = @. sigmoid_fast(gxs[2] + ghs[2] + bs[2])
-  return r, z
+    r = @. sigmoid_fast(gxs[1] + ghs[1] + bs[1])
+    z = @. sigmoid_fast(gxs[2] + ghs[2] + bs[2])
+    return r, z
 end
 
 struct GRUCell{A,V,S}
-  Wi::A
-  Wh::A
-  b::V
-  state0::S
+    Wi::A
+    Wh::A
+    b::V
+    state0::S
 end
 
 GRUCell((in, out)::Pair; init = glorot_uniform, initb = zeros32, init_state = zeros32) =
-  GRUCell(init(out * 3, in), init(out * 3, out), initb(out * 3), init_state(out,1))
+    GRUCell(init(out * 3, in), init(out * 3, out), initb(out * 3), init_state(out, 1))
 
-function (m::GRUCell{A,V,<:AbstractMatrix{T}})(h, x::Union{AbstractVecOrMat{T},OneHotArray}) where {A,V,T}
-  Wi, Wh, b, o = m.Wi, m.Wh, m.b, size(h, 1)
-  gxs, ghs, bs = multigate(Wi*x, o, Val(3)), multigate(Wh*h, o, Val(3)), multigate(b, o, Val(3))
-  r, z = _gru_output(gxs, ghs, bs)
-  h̃ = @. tanh_fast(gxs[3] + r * ghs[3] + bs[3])
-  h′ = @. (1 - z) * h̃ + z * h
-  return h′, reshape_cell_output(h′, x)
+function (m::GRUCell{A,V,<:AbstractMatrix{T}})(
+    h,
+    x::Union{AbstractVecOrMat{T},OneHotArray},
+) where {A,V,T}
+    Wi, Wh, b, o = m.Wi, m.Wh, m.b, size(h, 1)
+    gxs, ghs, bs =
+        multigate(Wi * x, o, Val(3)), multigate(Wh * h, o, Val(3)), multigate(b, o, Val(3))
+    r, z = _gru_output(gxs, ghs, bs)
+    h̃ = @. tanh_fast(gxs[3] + r * ghs[3] + bs[3])
+    h′ = @. (1 - z) * h̃ + z * h
+    return h′, reshape_cell_output(h′, x)
 end
 
 @functor GRUCell
 
 Base.show(io::IO, l::GRUCell) =
-  print(io, "GRUCell(", size(l.Wi, 2), " => ", size(l.Wi, 1)÷3, ")")
+    print(io, "GRUCell(", size(l.Wi, 2), " => ", size(l.Wi, 1) ÷ 3, ")")
 
 """
     GRU(in => out)
@@ -415,30 +437,39 @@ Recur(m::GRUCell) = Recur(m, m.state0)
 # GRU v3
 
 struct GRUv3Cell{A,V,S}
-  Wi::A
-  Wh::A
-  b::V
-  Wh_h̃::A
-  state0::S
+    Wi::A
+    Wh::A
+    b::V
+    Wh_h̃::A
+    state0::S
 end
 
 GRUv3Cell((in, out)::Pair; init = glorot_uniform, initb = zeros32, init_state = zeros32) =
-  GRUv3Cell(init(out * 3, in), init(out * 2, out), initb(out * 3),
-            init(out, out), init_state(out,1))
+    GRUv3Cell(
+        init(out * 3, in),
+        init(out * 2, out),
+        initb(out * 3),
+        init(out, out),
+        init_state(out, 1),
+    )
 
-function (m::GRUv3Cell{A,V,<:AbstractMatrix{T}})(h, x::Union{AbstractVecOrMat{T},OneHotArray}) where {A,V,T}
-  Wi, Wh, b, Wh_h̃, o = m.Wi, m.Wh, m.b, m.Wh_h̃, size(h, 1)
-  gxs, ghs, bs = multigate(Wi*x, o, Val(3)), multigate(Wh*h, o, Val(2)), multigate(b, o, Val(3))
-  r, z = _gru_output(gxs, ghs, bs)
-  h̃ = tanh_fast.(gxs[3] .+ (Wh_h̃ * (r .* h)) .+ bs[3])
-  h′ = @. (1 - z) * h̃ + z * h
-  return h′, reshape_cell_output(h′, x)
+function (m::GRUv3Cell{A,V,<:AbstractMatrix{T}})(
+    h,
+    x::Union{AbstractVecOrMat{T},OneHotArray},
+) where {A,V,T}
+    Wi, Wh, b, Wh_h̃, o = m.Wi, m.Wh, m.b, m.Wh_h̃, size(h, 1)
+    gxs, ghs, bs =
+        multigate(Wi * x, o, Val(3)), multigate(Wh * h, o, Val(2)), multigate(b, o, Val(3))
+    r, z = _gru_output(gxs, ghs, bs)
+    h̃ = tanh_fast.(gxs[3] .+ (Wh_h̃ * (r .* h)) .+ bs[3])
+    h′ = @. (1 - z) * h̃ + z * h
+    return h′, reshape_cell_output(h′, x)
 end
 
 @functor GRUv3Cell
 
 Base.show(io::IO, l::GRUv3Cell) =
-  print(io, "GRUv3Cell(", size(l.Wi, 2), " => ", size(l.Wi, 1)÷3, ")")
+    print(io, "GRUv3Cell(", size(l.Wi, 2), " => ", size(l.Wi, 1) ÷ 3, ")")
 
 """
     GRUv3(in => out)
