@@ -1,35 +1,41 @@
 loadleaf!(dst, src, err) = dst
 loadleaf!(dst::AbstractArray, src, err) =
-  error("Tried to copy $src into an array destination; this is not allowed.")
+    error("Tried to copy $src into an array destination; this is not allowed.")
 loadleaf!(dst, src::AbstractArray, err) =
-  error("Tried to copy an array to $dst; this is not allowed.")
+    error("Tried to copy an array to $dst; this is not allowed.")
 function loadleaf!(dst::AbstractArray, src::Bool, err)
-  if iszero(src)
-    dst .= src
-  else
-    error("Cannot copy boolean parameter == true to non-zero parameter.")
-  end
-  return dst
+    if iszero(src)
+        dst .= src
+    else
+        error("Cannot copy boolean parameter == true to non-zero parameter.")
+    end
+    return dst
 end
-loadleaf!(dst::Bool, src::AbstractArray, err) = iszero(dst) ? dst :
-  error("Cannot copy non-zero parameter to boolean parameter == true.")
+loadleaf!(dst::Bool, src::AbstractArray, err) =
+    iszero(dst) ? dst :
+    error("Cannot copy non-zero parameter to boolean parameter == true.")
 function loadleaf!(dst::AbstractArray, src::AbstractArray, err)
-  (size(dst) == size(src)) || throw(err)
-  copyto!(dst, src)
+    (size(dst) == size(src)) || throw(err)
+    copyto!(dst, src)
 end
 
-_tie_check(dst::Bool, src::AbstractArray) = iszero(dst) ||
-  error("Encountered tied parameter with boolean source at some nodes and non-boolean sources at others.")
-_tie_check(dst::AbstractArray, src::Bool) = (iszero(dst) && iszero(src)) ||
-  error("Encountered tied parameter with boolean source at some nodes and non-boolean sources at others.")
-_tie_check(dst::AbstractArray, src::AbstractArray) = (dst == src) ||
-  error("Encountered tied destination parameters with untied and mismatched sources.")
+_tie_check(dst::Bool, src::AbstractArray) =
+    iszero(dst) || error(
+        "Encountered tied parameter with boolean source at some nodes and non-boolean sources at others.",
+    )
+_tie_check(dst::AbstractArray, src::Bool) =
+    (iszero(dst) && iszero(src)) || error(
+        "Encountered tied parameter with boolean source at some nodes and non-boolean sources at others.",
+    )
+_tie_check(dst::AbstractArray, src::AbstractArray) =
+    (dst == src) ||
+    error("Encountered tied destination parameters with untied and mismatched sources.")
 _tie_check(dst, src) = true
 
 _bool_tie_check(dst, src) = true
 
 _filter_children(f, children::NamedTuple) =
-  NamedTuple(filter(kv -> f(kv[2]), pairs(children)))
+    NamedTuple(filter(kv -> f(kv[2]), pairs(children)))
 _filter_children(f, children) = filter(f, children)
 
 """
@@ -82,22 +88,25 @@ Likewise, copying a `src` value of `false` to any `dst` array is valid,
 but copying a `src` value of `true` will error.
 """
 function loadmodel!(dst, src; filter = _ -> true, cache = Base.IdSet())
-  ldsts = _filter_children(filter, functor(dst)[1])
-  lsrcs = _filter_children(filter, functor(src)[1])
-  (keys(ldsts) == keys(lsrcs)) ||
-    throw(ArgumentError("Tried to load $src into $dst but the structures do not match."))
+    ldsts = _filter_children(filter, functor(dst)[1])
+    lsrcs = _filter_children(filter, functor(src)[1])
+    (keys(ldsts) == keys(lsrcs)) || throw(
+        ArgumentError("Tried to load $src into $dst but the structures do not match."),
+    )
 
-  err = DimensionMismatch("Tried to load $src into $dst but the parameter sizes do not match.")
-  foreach(ldsts, lsrcs) do ldst, lsrc
-    if ldst in cache # we already loaded this parameter before
-      _tie_check(ldst, lsrc) && return ldst
-    elseif Functors.isleaf(ldst) # our first time loading this leaf
-      push!(cache, ldst)
-      loadleaf!(ldst, lsrc, err)
-    else # this isn't a leaf
-      loadmodel!(ldst, lsrc; filter = filter, cache = cache)
+    err = DimensionMismatch(
+        "Tried to load $src into $dst but the parameter sizes do not match.",
+    )
+    foreach(ldsts, lsrcs) do ldst, lsrc
+        if ldst in cache # we already loaded this parameter before
+            _tie_check(ldst, lsrc) && return ldst
+        elseif Functors.isleaf(ldst) # our first time loading this leaf
+            push!(cache, ldst)
+            loadleaf!(ldst, lsrc, err)
+        else # this isn't a leaf
+            loadmodel!(ldst, lsrc; filter = filter, cache = cache)
+        end
     end
-  end
 
-  return dst
+    return dst
 end

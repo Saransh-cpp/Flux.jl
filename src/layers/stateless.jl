@@ -23,7 +23,7 @@ julia> xs |> m |> size
 ```
 """
 function flatten(x::AbstractArray)
-  return reshape(x, :, size(x)[end])
+    return reshape(x, :, size(x)[end])
 end
 
 """
@@ -52,8 +52,8 @@ julia> isapprox(std(y, dims=1), ones(1, 2), atol=0.2) && std(y, dims=1) != std(x
 true
 ```
 """
-@inline function normalise(x::AbstractArray; dims=ndims(x), ϵ=ofeltype(x, 1e-5))
-  μ = mean(x, dims=dims)
-  σ = std(x, dims=dims, mean=μ, corrected=false)
-  return @. (x - μ) / (σ + ϵ)
+@inline function normalise(x::AbstractArray; dims = ndims(x), ϵ = ofeltype(x, 1e-5))
+    μ = mean(x, dims = dims)
+    σ = std(x, dims = dims, mean = μ, corrected = false)
+    return @. (x - μ) / (σ + ϵ)
 end

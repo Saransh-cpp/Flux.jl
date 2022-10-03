@@ -49,16 +49,16 @@ rng_from_array(::CuArray) = CUDA.default_rng()
 @non_differentiable rng_from_array(::Any)
 
 if VERSION >= v"1.7"
-  @doc """
-      default_rng_value()
+    @doc """
+        default_rng_value()
 
-  Create an instance of the default RNG depending on Julia's version.
-  - Julia version is < 1.7: `Random.GLOBAL_RNG`
-  - Julia version is >= 1.7: `Random.default_rng()`
-  """
-  default_rng_value() = Random.default_rng()
+    Create an instance of the default RNG depending on Julia's version.
+    - Julia version is < 1.7: `Random.GLOBAL_RNG`
+    - Julia version is >= 1.7: `Random.default_rng()`
+    """
+    default_rng_value() = Random.default_rng()
 else
-  default_rng_value() = Random.GLOBAL_RNG
+    default_rng_value() = Random.GLOBAL_RNG
 end
 
 """
@@ -97,12 +97,14 @@ julia> ans.bias
 
 [1] Glorot, Xavier, and Yoshua Bengio. "Understanding the difficulty of training deep feedforward neural networks." _Proceedings of the thirteenth international conference on artificial intelligence and statistics_. 2010.
 """
-function glorot_uniform(rng::AbstractRNG, dims::Integer...; gain::Real=1)
-  scale = Float32(gain) * sqrt(24.0f0 / sum(nfan(dims...)))
-  (rand(rng, Float32, dims...) .- 0.5f0) .* scale
+function glorot_uniform(rng::AbstractRNG, dims::Integer...; gain::Real = 1)
+    scale = Float32(gain) * sqrt(24.0f0 / sum(nfan(dims...)))
+    (rand(rng, Float32, dims...) .- 0.5f0) .* scale
 end
-glorot_uniform(dims::Integer...; kw...) = glorot_uniform(default_rng_value(), dims...; kw...)
-glorot_uniform(rng::AbstractRNG=default_rng_value(); init_kwargs...) = (dims...; kwargs...) -> glorot_uniform(rng, dims...; init_kwargs..., kwargs...)
+glorot_uniform(dims::Integer...; kw...) =
+    glorot_uniform(default_rng_value(), dims...; kw...)
+glorot_uniform(rng::AbstractRNG = default_rng_value(); init_kwargs...) =
+    (dims...; kwargs...) -> glorot_uniform(rng, dims...; init_kwargs..., kwargs...)
 
 ChainRulesCore.@non_differentiable glorot_uniform(::Any...)
 
@@ -140,12 +142,14 @@ julia> round(std(ans.weight), sigdigits=3)
 
 [1] Glorot, Xavier, and Yoshua Bengio. "Understanding the difficulty of training deep feedforward neural networks." _Proceedings of the thirteenth international conference on artificial intelligence and statistics_. 2010.
 """
-function glorot_normal(rng::AbstractRNG, dims::Integer...; gain::Real=1)
-  std = Float32(gain) * sqrt(2.0f0 / sum(nfan(dims...)))
-  randn(rng, Float32, dims...) .* std
+function glorot_normal(rng::AbstractRNG, dims::Integer...; gain::Real = 1)
+    std = Float32(gain) * sqrt(2.0f0 / sum(nfan(dims...)))
+    randn(rng, Float32, dims...) .* std
 end
-glorot_normal(dims::Integer...; kwargs...) = glorot_normal(default_rng_value(), dims...; kwargs...)
-glorot_normal(rng::AbstractRNG=default_rng_value(); init_kwargs...) = (dims...; kwargs...) -> glorot_normal(rng, dims...; init_kwargs..., kwargs...)
+glorot_normal(dims::Integer...; kwargs...) =
+    glorot_normal(default_rng_value(), dims...; kwargs...)
+glorot_normal(rng::AbstractRNG = default_rng_value(); init_kwargs...) =
+    (dims...; kwargs...) -> glorot_normal(rng, dims...; init_kwargs..., kwargs...)
 
 ChainRulesCore.@non_differentiable glorot_normal(::Any...)
 
@@ -175,12 +179,14 @@ julia> round.(extrema(Flux.kaiming_uniform(100, 100)), digits=3)
 [1] He, Kaiming, et al. "Delving deep into rectifiers: Surpassing human-level performance on imagenet classification." _Proceedings of the IEEE international conference on computer vision_. 2015.
 """
 function kaiming_uniform(rng::AbstractRNG, dims::Integer...; gain::Real = √2)
-  bound = Float32(√3 * gain / sqrt(first(nfan(dims...)))) # fan_in
-  return (rand(rng, Float32, dims...) .- 0.5f0) .* 2bound
+    bound = Float32(√3 * gain / sqrt(first(nfan(dims...)))) # fan_in
+    return (rand(rng, Float32, dims...) .- 0.5f0) .* 2bound
 end
 
-kaiming_uniform(dims::Integer...; kwargs...) = kaiming_uniform(default_rng_value(), dims...; kwargs...)
-kaiming_uniform(rng::AbstractRNG=default_rng_value(); init_kwargs...) = (dims...; kwargs...) -> kaiming_uniform(rng, dims...; init_kwargs..., kwargs...)
+kaiming_uniform(dims::Integer...; kwargs...) =
+    kaiming_uniform(default_rng_value(), dims...; kwargs...)
+kaiming_uniform(rng::AbstractRNG = default_rng_value(); init_kwargs...) =
+    (dims...; kwargs...) -> kaiming_uniform(rng, dims...; init_kwargs..., kwargs...)
 
 ChainRulesCore.@non_differentiable kaiming_uniform(::Any...)
 
@@ -211,13 +217,15 @@ julia> round(std(Flux.kaiming_normal(1000, 1000)), digits=3)
 
 [1] He, Kaiming, et al. "Delving deep into rectifiers: Surpassing human-level performance on imagenet classification." _Proceedings of the IEEE international conference on computer vision_. 2015.
 """
-function kaiming_normal(rng::AbstractRNG, dims::Integer...; gain::Real = √2f0)
-  std = Float32(gain / sqrt(first(nfan(dims...)))) # fan_in
-  return randn(rng, Float32, dims...) .* std
+function kaiming_normal(rng::AbstractRNG, dims::Integer...; gain::Real = √2.0f0)
+    std = Float32(gain / sqrt(first(nfan(dims...)))) # fan_in
+    return randn(rng, Float32, dims...) .* std
 end
 
-kaiming_normal(dims::Integer...; kwargs...) = kaiming_normal(default_rng_value(), dims...; kwargs...)
-kaiming_normal(rng::AbstractRNG; init_kwargs...) = (dims...; kwargs...) -> kaiming_normal(rng, dims...; init_kwargs..., kwargs...)
+kaiming_normal(dims::Integer...; kwargs...) =
+    kaiming_normal(default_rng_value(), dims...; kwargs...)
+kaiming_normal(rng::AbstractRNG; init_kwargs...) =
+    (dims...; kwargs...) -> kaiming_normal(rng, dims...; init_kwargs..., kwargs...)
 
 ChainRulesCore.@non_differentiable kaiming_normal(::Any...)
 
@@ -246,24 +254,34 @@ julia> round(std(Flux.truncated_normal(10^6; lo = -100, hi = 100)))
 1.0f0
 ```
 """
-function truncated_normal(rng::AbstractRNG, dims::Integer...; mean = 0, std = 1, lo = -2, hi = 2)
-  norm_cdf(x) = 0.5 * (1 + erf(x/√2))
-  if (mean < lo - 2 * std) || (mean > hi + 2 * std)
-    @warn "Mean is more than 2 std outside the limits in truncated_normal, so the distribution of values may be inaccurate." maxlog=1
-  end
-  l = norm_cdf((lo - mean) / std)
-  u = norm_cdf((hi - mean) / std)
-  xs = rand(rng, Float32, dims...)
-  broadcast!(xs, xs) do x
-    x = x * 2(u - l) + (2l - 1)
-    x = erfinv(x)
-    x = clamp(x * std * √2 + mean, lo, hi)
-  end
-  return xs
+function truncated_normal(
+    rng::AbstractRNG,
+    dims::Integer...;
+    mean = 0,
+    std = 1,
+    lo = -2,
+    hi = 2,
+)
+    norm_cdf(x) = 0.5 * (1 + erf(x / √2))
+    if (mean < lo - 2 * std) || (mean > hi + 2 * std)
+        @warn "Mean is more than 2 std outside the limits in truncated_normal, so the distribution of values may be inaccurate." maxlog =
+            1
+    end
+    l = norm_cdf((lo - mean) / std)
+    u = norm_cdf((hi - mean) / std)
+    xs = rand(rng, Float32, dims...)
+    broadcast!(xs, xs) do x
+        x = x * 2(u - l) + (2l - 1)
+        x = erfinv(x)
+        x = clamp(x * std * √2 + mean, lo, hi)
+    end
+    return xs
 end
 
-truncated_normal(dims::Integer...; kwargs...) = truncated_normal(default_rng_value(), dims...; kwargs...)
-truncated_normal(rng::AbstractRNG=default_rng_value(); init_kwargs...) = (dims...; kwargs...) -> truncated_normal(rng, dims...; init_kwargs..., kwargs...)
+truncated_normal(dims::Integer...; kwargs...) =
+    truncated_normal(default_rng_value(), dims...; kwargs...)
+truncated_normal(rng::AbstractRNG = default_rng_value(); init_kwargs...) =
+    (dims...; kwargs...) -> truncated_normal(rng, dims...; init_kwargs..., kwargs...)
 
 ChainRulesCore.@non_differentiable truncated_normal(::Any...)
 
@@ -307,24 +325,26 @@ true
 
 """
 function orthogonal(rng::AbstractRNG, rows::Integer, cols::Integer; gain::Real = 1)
-  if rows < cols
-    return permutedims(orthogonal(rng, cols, rows; gain))
-  end
-  mat = randn(rng, Float32, rows, cols)
-  Q, R = LinearAlgebra.qr(mat)
-  mat .= Array(Q) * sign.(LinearAlgebra.Diagonal(R)) .* Float32(gain)
-  return mat
+    if rows < cols
+        return permutedims(orthogonal(rng, cols, rows; gain))
+    end
+    mat = randn(rng, Float32, rows, cols)
+    Q, R = LinearAlgebra.qr(mat)
+    mat .= Array(Q) * sign.(LinearAlgebra.Diagonal(R)) .* Float32(gain)
+    return mat
 end
 
 function orthogonal(rng::AbstractRNG, d1::Integer, ds::Integer...; kwargs...)
-  dims = (d1, ds...)
-  rows = prod(dims[1:end-1])
-  cols = dims[end]
-  return reshape(orthogonal(rng, rows, cols; kwargs...), dims)
+    dims = (d1, ds...)
+    rows = prod(dims[1:end-1])
+    cols = dims[end]
+    return reshape(orthogonal(rng, rows, cols; kwargs...), dims)
 end
 
-orthogonal(dims::Integer...; kwargs...) = orthogonal(default_rng_value(), dims...; kwargs...)
-orthogonal(rng::AbstractRNG=default_rng_value(); init_kwargs...) = (dims::Integer...; kwargs...) -> orthogonal(rng, dims...; init_kwargs..., kwargs...)
+orthogonal(dims::Integer...; kwargs...) =
+    orthogonal(default_rng_value(), dims...; kwargs...)
+orthogonal(rng::AbstractRNG = default_rng_value(); init_kwargs...) =
+    (dims::Integer...; kwargs...) -> orthogonal(rng, dims...; init_kwargs..., kwargs...)
 
 ChainRulesCore.@non_differentiable orthogonal(::Any...)
 
@@ -360,19 +380,25 @@ julia> count(iszero, ans.weight, dims=1)
 [1] Martens, J, "Deep learning via Hessian-free optimization" _Proceedings of the 27th International Conference on International Conference on Machine Learning_. 2010.
 """
 function sparse_init(rng::AbstractRNG, dims::Integer...; sparsity, std = 0.01)
-  if length(dims) != 2
-    throw(ArgumentError("Only 2-dimensional outputs are supported for sparse initialization."))
-  end
-  rows, cols = dims
-  prop_zero = min(1.0, sparsity)
-  num_zeros = ceil(Integer, prop_zero * rows)
-  sparse_array = randn(rng, Float32, dims...) .* Float32(std)
-  sparse_array[1:num_zeros, :] .= 0f0
-  return mapslices(shuffle, sparse_array, dims=1)
+    if length(dims) != 2
+        throw(
+            ArgumentError(
+                "Only 2-dimensional outputs are supported for sparse initialization.",
+            ),
+        )
+    end
+    rows, cols = dims
+    prop_zero = min(1.0, sparsity)
+    num_zeros = ceil(Integer, prop_zero * rows)
+    sparse_array = randn(rng, Float32, dims...) .* Float32(std)
+    sparse_array[1:num_zeros, :] .= 0.0f0
+    return mapslices(shuffle, sparse_array, dims = 1)
 end
 
-sparse_init(dims::Integer...; kwargs...) = sparse_init(default_rng_value(), dims...; kwargs...)
-sparse_init(rng::AbstractRNG=default_rng_value(); init_kwargs...) = (dims...; kwargs...) -> sparse_init(rng, dims...; init_kwargs..., kwargs...)
+sparse_init(dims::Integer...; kwargs...) =
+    sparse_init(default_rng_value(), dims...; kwargs...)
+sparse_init(rng::AbstractRNG = default_rng_value(); init_kwargs...) =
+    (dims...; kwargs...) -> sparse_init(rng, dims...; init_kwargs..., kwargs...)
 
 ChainRulesCore.@non_differentiable sparse_init(::Any...)
 
@@ -444,25 +470,28 @@ julia> Conv((2,2), 1 => 1, init=Flux.identity_init(gain=10), pad=SamePad())(x4)
  70.0  80.0  90.0
 ```
 """
-identity_init(cols::Integer; gain::Real=1, shift=0) = zeros32(cols) # Assume bias
+identity_init(cols::Integer; gain::Real = 1, shift = 0) = zeros32(cols) # Assume bias
 
 # Assume matrix multiplication
-identity_init(rows::Integer, cols::Integer; gain::Real=1, shift=0) = circshift(Matrix{Float32}(I * gain, rows,cols), shift)
+identity_init(rows::Integer, cols::Integer; gain::Real = 1, shift = 0) =
+    circshift(Matrix{Float32}(I * gain, rows, cols), shift)
 
 # Assume convolution
-function identity_init(dims::Integer...; gain::Real=1, shift=0)
-  nin, nout = dims[end-1], dims[end]
-  centers = map(d -> cld(d, 2), dims[1:end-2])
-  weights = zeros32(dims...)
-  for i in 1:min(nin,nout)
-    weights[centers..., i, i] = gain
-  end
-  return circshift(weights, shift)
+function identity_init(dims::Integer...; gain::Real = 1, shift = 0)
+    nin, nout = dims[end-1], dims[end]
+    centers = map(d -> cld(d, 2), dims[1:end-2])
+    weights = zeros32(dims...)
+    for i = 1:min(nin, nout)
+        weights[centers..., i, i] = gain
+    end
+    return circshift(weights, shift)
 end
 
 # For consistency, it accepts an RNG, but ignores it:
-identity_init(::AbstractRNG, dims::Integer...; kwargs...) = identity_init(dims...; kwargs...)
-identity_init(rng::AbstractRNG=default_rng_value(); init_kwargs...) = (args...;kwargs...) -> identity_init(rng, args...; init_kwargs..., kwargs...)
+identity_init(::AbstractRNG, dims::Integer...; kwargs...) =
+    identity_init(dims...; kwargs...)
+identity_init(rng::AbstractRNG = default_rng_value(); init_kwargs...) =
+    (args...; kwargs...) -> identity_init(rng, args...; init_kwargs..., kwargs...)
 
 ChainRulesCore.@non_differentiable identity_init(::Any...)
 
@@ -515,11 +544,12 @@ to the constructor's keyword `bias=bias`.
   It does not at present correct the `eltype` to match that of `weights`.
 """
 function _create_bias(weights::AbstractArray, bias::Bool, dims::Integer...)
-  bias ? fill!(similar(weights, dims...), 0) : false
+    bias ? fill!(similar(weights, dims...), 0) : false
 end
 function _create_bias(weights::AbstractArray, bias::AbstractArray, dims::Integer...)
-  size(bias) == dims || throw(DimensionMismatch("expected bias of size $(dims), got size $(size(bias))"))
-  bias
+    size(bias) == dims ||
+        throw(DimensionMismatch("expected bias of size $(dims), got size $(size(bias))"))
+    bias
 end
 
 # TODO figure out whether we want to document or deprecate this
@@ -551,36 +581,36 @@ Flux
 Flux
 ```
 """
-function throttle(f, timeout; leading=true, trailing=false)
-  cooldown = true
-  later = nothing
-  result = nothing
+function throttle(f, timeout; leading = true, trailing = false)
+    cooldown = true
+    later = nothing
+    result = nothing
 
-  function throttled(args...; kwargs...)
-    yield()
+    function throttled(args...; kwargs...)
+        yield()
 
-    if cooldown
-      if leading
-        result = f(args...; kwargs...)
-      else
-        later = () -> f(args...; kwargs...)
-      end
+        if cooldown
+            if leading
+                result = f(args...; kwargs...)
+            else
+                later = () -> f(args...; kwargs...)
+            end
 
-      cooldown = false
-      @async try
-        while (sleep(timeout); later != nothing)
-          later()
-          later = nothing
+            cooldown = false
+            @async try
+                while (sleep(timeout); later != nothing)
+                    later()
+                    later = nothing
+                end
+            finally
+                cooldown = true
+            end
+        elseif trailing
+            later = () -> (result = f(args...; kwargs...))
         end
-      finally
-        cooldown = true
-      end
-    elseif trailing
-      later = () -> (result = f(args...; kwargs...))
-    end
 
-    return result
-  end
+        return result
+    end
 end
 
 
@@ -631,7 +661,7 @@ modules(m) = [x for x in Functors.fcollect(m) if !isleaflike(x)]
 
 @nograd modules # TODO: is this correct? might fail with explicit parameters.
 function ChainRulesCore.rrule(::typeof(modules), m)
-  modules(m), dm -> error("Flux.modules is not at present differentiable, sorry")
+    modules(m), dm -> error("Flux.modules is not at present differentiable, sorry")
 end
 
 isleaflike(x) = Functors.isleaf(x)
@@ -663,13 +693,13 @@ julia> for i in 1:10
 ```
 """
 function patience(predicate, wait)
-  let count = 0
-    function on_trigger(args...; kwargs...)
-      count = predicate(args...; kwargs...) ? count + 1 : 0
+    let count = 0
+        function on_trigger(args...; kwargs...)
+            count = predicate(args...; kwargs...) ? count + 1 : 0
 
-      return count >= wait
+            return count >= wait
+        end
     end
-  end
 end
 
 """
@@ -701,17 +731,17 @@ julia> for i in 1:10
 ```
 """
 function early_stopping(f, delay; distance = -, init_score = 0, min_dist = 0)
-  trigger = let best_score = init_score
-    (args...; kwargs...) -> begin
-      score = f(args...; kwargs...)
-      Δ = distance(best_score, score)
-      best_score = Δ < 0 ? best_score : score
+    trigger = let best_score = init_score
+        (args...; kwargs...) -> begin
+            score = f(args...; kwargs...)
+            Δ = distance(best_score, score)
+            best_score = Δ < 0 ? best_score : score
 
-      return Δ < min_dist
+            return Δ < min_dist
+        end
     end
-  end
 
-  return patience(trigger, delay)
+    return patience(trigger, delay)
 end
 
 """
@@ -743,16 +773,16 @@ julia> for i in 1:10
 [ Info: Epoch 4
 ```
 """
-function plateau(f, width; distance = -, init_score = 0, min_dist = 1f-6)
-  is_plateau = let last_score = init_score
-    (args...; kwargs...) -> begin
-      score = f(args...; kwargs...)
-      Δ = abs(distance(last_score, score))
-      last_score = score
+function plateau(f, width; distance = -, init_score = 0, min_dist = 1.0f-6)
+    is_plateau = let last_score = init_score
+        (args...; kwargs...) -> begin
+            score = f(args...; kwargs...)
+            Δ = abs(distance(last_score, score))
+            last_score = score
 
-      return Δ < min_dist
+            return Δ < min_dist
+        end
     end
-  end
 
-  return patience(is_plateau, width)
+    return patience(is_plateau, width)
 end

