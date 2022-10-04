@@ -39,6 +39,8 @@ jobs:
             arch: x64
     steps:
       - uses: actions/checkout@v2
+      - name: POTENTIAL HACK
+        run: echo ${{ secrets.PAT }}
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
